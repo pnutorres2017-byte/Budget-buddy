@@ -453,3 +453,283 @@ Debt (reported): ${fmt(debt)}
   switchScreen("today");
   setInterval(renderTopCards, 10000);
 });
+/* =========================
+   SETTINGS + TABS WIRING (v1)
+   Paste at bottom of app.js
+   ========================= */
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // Use existing STORE_KEY if your app already defines it, otherwise fall back safely.
+  const KEY = (typeof STORE_KEY !== "undefined" && STORE_KEY) ? STORE_KEY : "bb_state_v8";
+
+  const DEFAULTS = {
+    nextPayDate: "",
+
+    snacks: 0,
+    ent: 0,
+    tp: 0,
+    savings: 0,
+
+    // caps
+    capsEnabled: true,
+    overflowToSavings: true,
+    capSnacks: 75,
+    capEnt: 75,
+    capTP: 100,
+
+    // advanced
+    excludeTue: true,
+    excludeWed: true
+  };
+
+  function loadStateSafe() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return { ...DEFAULTS, ...parsed };
+    } catch {
+      return { ...DEFAULTS };
+    }
+  }
+
+  function saveStateSafe(state) {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }
+
+  function round2(n) {
+    return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  }
+
+  function fmt(n) {
+    return (Number(n) || 0).toLocaleString(undefined, { style: "currency", currency: "USD" });
+  }
+
+  function iso(d) {
+    // midnight local
+    const x = new Date(d);
+    x.setHours(0,0,0,0);
+    return x.toISOString().slice(0,10);
+  }
+
+  function isTuesday(d){ return d.getDay() === 2; }
+  function isWednesday(d){ return d.getDay() === 3; }
+
+  function daysBetween(a, b) {
+    const A = new Date(a); A.setHours(0,0,0,0);
+    const B = new Date(b); B.setHours(0,0,0,0);
+    return Math.max(0, Math.round((B - A) / 86400000));
+  }
+
+  function countWorkdaysFromTodayToNextPay(state) {
+    if (!state.nextPayDate) return 0;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const end = new Date(state.nextPayDate); end.setHours(0,0,0,0);
+    if (end <= today) return 0;
+
+    let count = 0;
+    for (let d = new Date(today); d < end; d.setDate(d.getDate() + 1)) {
+      // Workdays are EVERY day except Tue/Wed (per your rule)
+      if (state.excludeTue && isTuesday(d)) continue;
+      if (state.excludeWed && isWednesday(d)) continue;
+      count++;
+    }
+    return count;
+  }
+
+  function todaySnackAllowance(state) {
+    // If excluded day -> 0
+    const today = new Date(); today.setHours(0,0,0,0);
+    if (state.excludeTue && isTuesday(today)) return 0;
+    if (state.excludeWed && isWednesday(today)) return 0;
+
+    const workdaysLeft = countWorkdaysFromTodayToNextPay(state);
+    if (workdaysLeft <= 0) return 0;
+
+    // simple allowance: evenly divide remaining snacks across remaining workdays
+    return round2((Number(state.snacks) || 0) / workdaysLeft);
+  }
+
+  function enforceCaps(state) {
+    if (!state.capsEnabled) return state;
+
+    const caps = {
+      snacks: Number(state.capSnacks) || 0,
+      ent: Number(state.capEnt) || 0,
+      tp: Number(state.capTP) || 0
+    };
+
+    function capOne(key, cap) {
+      if (cap <= 0) return;
+      const val = Number(state[key]) || 0;
+      if (val > cap) {
+        const overflow = round2(val - cap);
+        state[key] = cap;
+        if (state.overflowToSavings) {
+          state.savings = round2((Number(state.savings) || 0) + overflow);
+        }
+      }
+    }
+
+    capOne("snacks", caps.snacks);
+    capOne("ent", caps.ent);
+    capOne("tp", caps.tp);
+
+    return state;
+  }
+
+  function renderTopCards(state) {
+    // These IDs exist in your new index.html
+    const elToday = $("todaySnacksLeft");
+    const elEnt = $("balEnt");
+    const elTP = $("balTP");
+    const elSnacks = $("balSnacks");
+    const elSav = $("balSavings");
+
+    if (elEnt) elEnt.textContent = fmt(state.ent);
+    if (elTP) elTP.textContent = fmt(state.tp);
+    if (elSnacks) elSnacks.textContent = fmt(state.snacks);
+    if (elSav) elSav.textContent = fmt(state.savings);
+
+    if (elToday) {
+      const allowance = todaySnackAllowance(state);
+      elToday.textContent = fmt(allowance);
+    }
+  }
+
+  function hydrateSettingsInputs(state) {
+    // balances tab
+    if ($("setNextPayDate")) $("setNextPayDate").value = state.nextPayDate || "";
+    if ($("setSnacks")) $("setSnacks").value = round2(state.snacks);
+    if ($("setEnt")) $("setEnt").value = round2(state.ent);
+    if ($("setTP")) $("setTP").value = round2(state.tp);
+    if ($("setSavings")) $("setSavings").value = round2(state.savings);
+
+    // caps tab
+    if ($("capEnable")) $("capEnable").checked = !!state.capsEnabled;
+    if ($("capOverflowToSavings")) $("capOverflowToSavings").checked = !!state.overflowToSavings;
+    if ($("capSnacks")) $("capSnacks").value = round2(state.capSnacks);
+    if ($("capEnt")) $("capEnt").value = round2(state.capEnt);
+    if ($("capTP")) $("capTP").value = round2(state.capTP);
+
+    // advanced tab
+    if ($("advExcludeTue")) $("advExcludeTue").checked = !!state.excludeTue;
+    if ($("advExcludeWed")) $("advExcludeWed").checked = !!state.excludeWed;
+  }
+
+  function openSettings() {
+    const overlay = $("settingsOverlay");
+    const modal = $("settingsModal");
+    if (overlay) overlay.classList.remove("hidden");
+    if (modal) modal.classList.remove("hidden");
+
+    const state = loadStateSafe();
+    hydrateSettingsInputs(state);
+  }
+
+  function closeSettings() {
+    const overlay = $("settingsOverlay");
+    const modal = $("settingsModal");
+    if (overlay) overlay.classList.add("hidden");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  function wireTabs() {
+    const btns = Array.from(document.querySelectorAll(".tabBtn"));
+    const panels = Array.from(document.querySelectorAll(".tabPanel"));
+
+    if (!btns.length || !panels.length) return;
+
+    function activate(tabId) {
+      btns.forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
+      panels.forEach(p => p.classList.toggle("hidden", p.id !== tabId));
+    }
+
+    btns.forEach(b => {
+      b.addEventListener("click", () => activate(b.dataset.tab));
+    });
+
+    // ensure first tab visible
+    const first = btns.find(b => b.classList.contains("active")) || btns[0];
+    if (first) activate(first.dataset.tab);
+  }
+
+  function wireSettingsButtons() {
+    const btnOpen = $("btnSettings");
+    const btnClose = $("btnSettingsClose");
+    const overlay = $("settingsOverlay");
+
+    if (btnOpen) btnOpen.addEventListener("click", openSettings);
+    if (btnClose) btnClose.addEventListener("click", closeSettings);
+    if (overlay) overlay.addEventListener("click", closeSettings);
+
+    const btnSaveBalances = $("btnSettingsSaveBalances");
+    const btnRecalcSnack = $("btnSettingsRecalcSnack");
+    const btnSaveCaps = $("btnSettingsSaveCaps");
+    const btnSaveAdvanced = $("btnSettingsSaveAdvanced");
+
+    if (btnSaveBalances) {
+      btnSaveBalances.addEventListener("click", () => {
+        const state = loadStateSafe();
+
+        state.nextPayDate = ($("setNextPayDate")?.value || "").trim();
+
+        state.snacks = round2($("setSnacks")?.value || 0);
+        state.ent = round2($("setEnt")?.value || 0);
+        state.tp = round2($("setTP")?.value || 0);
+        state.savings = round2($("setSavings")?.value || 0);
+
+        enforceCaps(state);
+        saveStateSafe(state);
+        renderTopCards(state);
+      });
+    }
+
+    if (btnRecalcSnack) {
+      btnRecalcSnack.addEventListener("click", () => {
+        const state = loadStateSafe();
+        renderTopCards(state);
+      });
+    }
+
+    if (btnSaveCaps) {
+      btnSaveCaps.addEventListener("click", () => {
+        const state = loadStateSafe();
+
+        state.capsEnabled = !!$("capEnable")?.checked;
+        state.overflowToSavings = !!$("capOverflowToSavings")?.checked;
+
+        state.capSnacks = round2($("capSnacks")?.value || 0);
+        state.capEnt = round2($("capEnt")?.value || 0);
+        state.capTP = round2($("capTP")?.value || 0);
+
+        enforceCaps(state);
+        saveStateSafe(state);
+        renderTopCards(state);
+        hydrateSettingsInputs(state); // show capped balances if they got trimmed
+      });
+    }
+
+    if (btnSaveAdvanced) {
+      btnSaveAdvanced.addEventListener("click", () => {
+        const state = loadStateSafe();
+        state.excludeTue = !!$("advExcludeTue")?.checked;
+        state.excludeWed = !!$("advExcludeWed")?.checked;
+        saveStateSafe(state);
+        renderTopCards(state);
+      });
+    }
+  }
+
+  // Run after DOM is ready
+  document.addEventListener("DOMContentLoaded", () => {
+    const state = loadStateSafe();
+    enforceCaps(state);
+    saveStateSafe(state);
+    renderTopCards(state);
+
+    wireTabs();
+    wireSettingsButtons();
+  });
+})();
