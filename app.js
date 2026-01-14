@@ -1,3 +1,5 @@
+Alert("app.js loaded");
+
 console.log("Budget Buddy loaded", new Date().toISOString());
 
 window.addEventListener("DOMContentLoaded", () => {
