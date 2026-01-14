@@ -12,6 +12,37 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function show(el) { el?.classList.remove("hidden"); }
   function hide(el) { el?.classList.add("hidden"); }
+// ---------- Screen rendering / bottom nav ----------
+function setActiveNav(screenId) {
+  $$(".bottomNav .navBtn, .bottomNav .navAdd").forEach((b) => b.classList.remove("active"));
+  const btn = document.querySelector(`.bottomNav [data-screen="${screenId}"]`);
+  if (btn) btn.classList.add("active");
+$$(".bottomNav [data-screen]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    switchScreen(btn.getAttribute("data-screen"));
+  });
+});
+  switchScreen("screenToday");
+}
+
+function switchScreen(screenId) {
+  $$(".screen").forEach((sec) => {
+    sec.classList.toggle("hidden", sec.id !== screenId);
+  });
+
+  setActiveNav(screenId);
+
+  // Re-render after switching
+  if (typeof renderTopCards === "function") renderTopCards();
+  if (typeof renderScreen === "function") renderScreen(screenId);
+}
+
+function renderScreen(screenId) {
+  // Safe no-op renders (only if you later define these)
+  if (screenId === "screenHistory" && typeof renderHistory === "function") renderHistory();
+  if (screenId === "screenCalendar" && typeof renderCalendar === "function") renderCalendar();
+  if (screenId === "screenManage" && typeof renderManage === "function") renderManage();
+}
 
   function round2(n) { return Math.round((Number(n) + Number.EPSILON) * 100) / 100; }
   function fmt(n) {
