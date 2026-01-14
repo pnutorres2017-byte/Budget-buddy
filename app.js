@@ -4,7 +4,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const $ = (id) => document.getElementById(id);
   const $$ = (sel) => document.querySelectorAll(sel);
 
-  const STORE_KEY = "bb_state_v4";
+  const STORE_KEY = "bb_state_v5";
 
   function show(el) { el?.classList.remove("hidden"); }
   function hide(el) { el?.classList.add("hidden"); }
@@ -28,7 +28,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     nextPayDate: "",
 
-    // Your rule: only Tue/Wed are excluded by default
+    // Your rule: only Tue/Wed are excluded by default (weekends are workdays)
     excludeTue: true,
     excludeWed: true,
     pto: [],
@@ -60,7 +60,6 @@ window.addEventListener("DOMContentLoaded", () => {
     state.pto = (state.pto || []).filter((d) => d >= today);
   }
 
-  // IMPORTANT: weekends are WORKDAYS for you.
   function isExcludedWorkday(d) {
     const dow = d.getDay(); // 0 Sun ... 6 Sat
     if (state.excludeTue && dow === 2) return true;
@@ -71,7 +70,6 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   function safeParseDate(yyyy_mm_dd) {
-    // Avoid timezone weirdness: force midnight local
     const dt = new Date(`${yyyy_mm_dd}T00:00:00`);
     return isNaN(dt.getTime()) ? null : dt;
   }
@@ -88,6 +86,31 @@ window.addEventListener("DOMContentLoaded", () => {
     return count;
   }
 
+  /* ---------- TP protection helper ---------- */
+  function nextPayDateObjOrFallback() {
+    const nextPay = state.nextPayDate ? safeParseDate(state.nextPayDate) : null;
+    if (nextPay) return nextPay;
+
+    // fallback: 14 days out if next pay isn't set/parseable
+    const d = new Date();
+    const fb = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    fb.setDate(fb.getDate() + 14);
+    return fb;
+  }
+
+  // “another Wednesday before my check”
+  // = there exists at least one Wednesday strictly AFTER today and ON/BEFORE nextPayDate
+  function hasUpcomingWednesdayBeforeNextPay() {
+    const today = startOfDay(new Date());
+    const nextPay = startOfDay(nextPayDateObjOrFallback());
+
+    for (let d = new Date(today); d <= nextPay; d.setDate(d.getDate() + 1)) {
+      if (isoDay(d) === isoDay(today)) continue; // skip today
+      if (d.getDay() === 3) return true; // Wednesday
+    }
+    return false;
+  }
+
   /* ---------- Snack daily lock ---------- */
   function ensureSnackDayLock(forceRecalc = false) {
     cleanExpiredPTO();
@@ -97,27 +120,18 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (!forceRecalc && state.snackLockedDate === todayISO) return;
 
-    // new day OR forced recalculation
     state.snackLockedDate = todayISO;
-    if (forceRecalc) {
-      // keep snackSpentToday if same day
-      state.snackSpentToday = state.snackSpentToday || 0;
-    } else {
-      state.snackSpentToday = 0;
-    }
+    if (!forceRecalc) state.snackSpentToday = 0;
 
-    // If today is excluded, allowance = 0
     if (isExcludedWorkday(today)) {
       state.snackAllowanceToday = 0;
       saveState();
       return;
     }
 
-    // Need next pay date to compute remaining workdays accurately
     const nextPay = state.nextPayDate ? safeParseDate(state.nextPayDate) : null;
 
     if (!nextPay) {
-      // fallback: assume 10 workdays left
       const fallbackWorkdays = 10;
       state.snackAllowanceToday = fallbackWorkdays > 0 ? round2(state.snacks / fallbackWorkdays) : 0;
       saveState();
@@ -148,7 +162,6 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderTopCards() {
-    // Force recalculation so you always see something update
     ensureSnackDayLock(true);
 
     setText("tSnackLeftToday", fmt(snackRemainingToday()));
@@ -157,7 +170,7 @@ window.addEventListener("DOMContentLoaded", () => {
     setText("tEnt", fmt(state.ent));
     setText("tTP", fmt(state.tp));
 
-    // Optional fallback ids if your HTML uses other names
+    // optional fallback ids
     setText("snackToday", fmt(snackRemainingToday()));
     setText("snackAllowance", fmt(state.snackAllowanceToday));
   }
@@ -216,7 +229,6 @@ window.addEventListener("DOMContentLoaded", () => {
     const savings = prompt("Savings balance:", String(state.savings));
     if (savings !== null) state.savings = round2(Number(savings));
 
-    // force recalc
     state.snackLockedDate = "";
     ensureSnackDayLock(true);
     saveState();
@@ -306,9 +318,30 @@ Will the budget last through till the next check: ${willLast ? "yes" : "no"}${re
       remaining = ok ? round2(state.ent - amt) : state.ent;
       if (!ok) reason = `Reason: over entertainment balance (${fmt(state.ent)})`;
     } else if (cat === "tp") {
-      ok = amt <= state.tp;
-      remaining = ok ? round2(state.tp - amt) : state.tp;
-      if (!ok) reason = `Reason: over TP balance (${fmt(state.tp)})`;
+      const projected = round2(state.tp - amt);
+
+      if (state.tp <= 0) {
+        ok = false;
+        remaining = state.tp;
+        reason = "Reason: TP balance is $0";
+      } else if (amt > state.tp) {
+        ok = false;
+        remaining = state.tp;
+        reason = `Reason: over TP balance (${fmt(state.tp)})`;
+      } else {
+        // TP protection rule:
+        // If there is another Wednesday before next payday,
+        // don't allow TP to drop below $15.
+        const hasWed = hasUpcomingWednesdayBeforeNextPay();
+        if (hasWed && projected < 15) {
+          ok = false;
+          remaining = state.tp;
+          reason = `Reason: TP protection — upcoming Wednesday before next check requires TP >= ${fmt(15)}. After purchase would be ${fmt(projected)}`;
+        } else {
+          ok = true;
+          remaining = projected;
+        }
+      }
     } else {
       ok = false;
       remaining = 0;
@@ -349,5 +382,5 @@ Will the budget last through till the next check: ${willLast ? "yes" : "no"}${re
   /* ---------- Keep Today UI fresh ---------- */
   renderTopCards();
   switchScreen("today");
-  setInterval(renderTopCards, 10000); // 10s refresh so the allowance is visible/updating
+  setInterval(renderTopCards, 10000);
 });
