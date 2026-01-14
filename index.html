@@ -1,382 +1,455 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover"
-  />
-  <title>Budget Buddy</title>
+console.log("Budget Buddy loaded", new Date().toISOString());
 
-  <!-- PWA -->
-  <link rel="manifest" href="manifest.webmanifest" />
-  <meta name="theme-color" content="#ffffff" />
+window.addEventListener("DOMContentLoaded", () => {
+  const $ = (id) => document.getElementById(id);
+  const $$ = (sel) => document.querySelectorAll(sel);
 
-  <!-- Styles -->
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
+  const STORE_KEY = "bb_state_v8";
 
-  <!-- ================= APP BAR ================= -->
-  <header class="appbar">
-    <button id="btnSettings" class="iconBtn" aria-label="Settings">
-      ⚙︎
-    </button>
+  // Caps (until configurable in Settings tabs)
+  const ENT_CAP = 75;
+  const SNACKS_CAP = 75;
 
-    <div class="appbarTitle">
-      <div class="appName">Budget Buddy</div>
-      <div class="appSub" id="subLine">—</div>
-    </div>
+  function show(el) { el?.classList.remove("hidden"); }
+  function hide(el) { el?.classList.add("hidden"); }
 
-    <div class="appbarSpacer"></div>
-  </header>
+  function round2(n) { return Math.round((Number(n) + Number.EPSILON) * 100) / 100; }
+  function fmt(n) {
+    return Number(n || 0).toLocaleString(undefined, { style: "currency", currency: "USD" });
+  }
 
-  <!-- ================= MAIN CONTENT ================= -->
-  <main class="content">
+  function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function isoDay(d) { return startOfDay(d).toISOString().slice(0, 10); }
+  function daysBetween(a, b) {
+    return Math.max(0, Math.round((startOfDay(b) - startOfDay(a)) / 86400000));
+  }
 
-    <!-- ---------- TODAY ---------- -->
-    <section id="screenToday" class="screen">
+  const defaultState = () => ({
+    savings: 0,
+    tp: 0,
+    snacks: 0,
+    ent: 0,
 
-      <div class="card">
-        <div class="topStats">
-          <div class="topStat">
-            <div class="k">Next check</div>
-            <div class="v" id="tNextCheck">—</div>
-          </div>
-          <div class="topStat">
-            <div class="k">Days left</div>
-            <div class="v" id="tDaysLeft">—</div>
-          </div>
-          <div class="topStat">
-            <div class="k">Workdays left</div>
-            <div class="v" id="tWorkdaysLeft">—</div>
-          </div>
-        </div>
-      </div>
+    nextPayDate: "",
 
-      <div class="cards3">
-        <div class="bigCard">
-          <div class="k">Snacks — left today</div>
-          <div class="big" id="tSnackLeftToday">$0.00</div>
-          <div class="sublabel" id="tSnackTodaySub">
-            Allowance today: $0.00
-          </div>
-        </div>
+    excludeTue: true,
+    excludeWed: true,
+    pto: [],
 
-        <div class="bigCard">
-          <div class="k">Entertainment</div>
-          <div class="big" id="tEnt">$0.00</div>
-          <div class="sublabel">Full balance</div>
-        </div>
+    snackLockedDate: "",
+    snackAllowanceToday: 0,
+    snackSpentToday: 0,
+  });
 
-        <div class="bigCard">
-          <div class="k">TP</div>
-          <div class="big" id="tTP">$0.00</div>
-          <div class="sublabel">Full balance</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="rowBetween">
-          <div class="h2">Quick view</div>
-          <button id="btnViewMore" class="ghostBtn">
-            Show details
-          </button>
-        </div>
-
-        <div id="todayDetails" class="detailsGrid hidden">
-          <div class="miniStat">
-            <div class="k">Snacks (full)</div>
-            <div class="v" id="tSnacksFull">$0.00</div>
-          </div>
-          <div class="miniStat">
-            <div class="k">Savings</div>
-            <div class="v" id="tSavings">$0.00</div>
-          </div>
-          <div class="miniStat">
-            <div class="k">Bills holding</div>
-            <div class="v" id="tHolding">$0.00</div>
-          </div>
-          <div class="miniStat">
-            <div class="k">Debt remaining</div>
-            <div class="v" id="tDebt">$0.00</div>
-          </div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ---------- HISTORY ---------- -->
-    <section id="screenHistory" class="screen hidden">
-      <div class="card">
-        <div class="rowBetween">
-          <div class="h2">History</div>
-          <button id="btnClearHistory" class="dangerGhostBtn">
-            Clear
-          </button>
-        </div>
-
-        <div class="row gap8">
-          <select id="histFilter" class="select">
-            <option value="all">All</option>
-            <option value="snacks">Snacks</option>
-            <option value="ent">Entertainment</option>
-            <option value="tp">TP</option>
-            <option value="newcheck">New checks</option>
-          </select>
-
-          <button id="btnExportHistory" class="ghostBtn">
-            Copy history
-          </button>
-        </div>
-      </div>
-
-      <div id="histList" class="list"></div>
-    </section>
-
-    <!-- ---------- CALENDAR ---------- -->
-    <section id="screenCalendar" class="screen hidden">
-
-      <div class="card">
-        <div class="h2">Workday rules</div>
-        <div class="row gap10">
-          <label class="chip">
-            <input id="exTue" type="checkbox" />
-            Exclude Tuesday
-          </label>
-          <label class="chip">
-            <input id="exWed" type="checkbox" />
-            Exclude Wednesday
-          </label>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="h2">PTO (auto removed)</div>
-
-        <div class="row gap8">
-          <input id="ptoDate" type="date" class="input" />
-          <input
-            id="ptoLabel"
-            type="text"
-            class="input"
-            placeholder="Label (optional)"
-          />
-          <button id="btnAddPTO" class="primaryBtn">
-            Add
-          </button>
-        </div>
-
-        <div id="ptoList" class="list"></div>
-      </div>
-
-    </section>
-
-    <!-- ---------- MANAGE ---------- -->
-    <section id="screenManage" class="screen hidden">
-
-      <div class="card">
-        <div class="rowBetween">
-          <div class="h2">Bills & subscriptions</div>
-          <button id="btnAddBill" class="primaryBtn">
-            Add bill
-          </button>
-        </div>
-
-        <div id="billList" class="list"></div>
-      </div>
-
-      <div class="card">
-        <div class="h2">Debt</div>
-
-        <div class="rowBetween">
-          <div>
-            <div class="k">Total debt remaining</div>
-            <div class="v" id="mDebt">$0.00</div>
-          </div>
-
-          <div class="row gap8">
-            <button class="ghostBtn" data-debtpay="25">$25</button>
-            <button class="ghostBtn" data-debtpay="50">$50</button>
-          </div>
-        </div>
-
-        <div class="row gap8">
-          <input
-            id="debtCustom"
-            type="number"
-            step="0.01"
-            class="input"
-            placeholder="Custom amount"
-          />
-          <button id="btnDebtCustom" class="primaryBtn">
-            Apply
-          </button>
-        </div>
-      </div>
-
-    </section>
-
-  </main>
-
-  <!-- ================= BOTTOM NAV ================= -->
-  <nav class="bottomNav">
-    <button class="navBtn active" data-nav="today">Today</button>
-    <button class="navBtn" data-nav="history">History</button>
-
-    <button id="btnAdd" class="fab" aria-label="Add">
-      +
-    </button>
-
-    <button class="navBtn" data-nav="calendar">Calendar</button>
-    <button class="navBtn" data-nav="manage">Manage</button>
-  </nav>
-
-  <!-- ================= ADD SHEET ================= -->
-  <div id="overlay" class="overlay hidden"></div>
-
-  <section id="sheetAdd" class="sheet hidden">
-    <div class="sheetHandle"></div>
-    <div class="sheetTitle">Add</div>
-
-    <button id="btnOpenNewCheck" class="primaryBtn wideBtn">
-      New check
-    </button>
-
-    <button id="btnOpenPurchase" class="ghostBtn wideBtn">
-      Purchase
-    </button>
-
-    <button id="btnCloseSheet" class="ghostBtn wideBtn">
-      Close
-    </button>
-  </section>
-
-  <!-- ================= PURCHASE SHEET ================= -->
-  <section id="sheetPurchase" class="sheet hidden">
-    <div class="sheetHandle"></div>
-    <div class="sheetTitle">Purchase</div>
-
-    <div class="card inset">
-      <div class="h3">Quick purchase</div>
-      <div class="quickGrid">
-        <button class="quickBtn" data-quickcat="snacks" data-quickamt="2.50">
-          Snack $2.50
-        </button>
-        <button class="quickBtn" data-quickcat="snacks" data-quickamt="4.00">
-          Snack $4.00
-        </button>
-        <button class="quickBtn" data-quickcat="snacks" data-quickamt="5.00">
-          Snack $5.00
-        </button>
-        <button class="quickBtn" data-quickcat="ent" data-quickamt="10">
-          Ent $10
-        </button>
-        <button class="quickBtn" data-quickcat="ent" data-quickamt="20">
-          Ent $20
-        </button>
-        <button class="quickBtn" data-quickcat="tp" data-quickamt="10">
-          TP $10
-        </button>
-      </div>
-    </div>
-
-    <div class="card inset">
-      <div class="h3">Custom purchase</div>
-
-      <div class="row gap8">
-        <input
-          id="pAmt"
-          type="number"
-          step="0.01"
-          class="input"
-          placeholder="Amount"
-        />
-
-        <select id="pCat" class="select">
-          <option value="snacks">Snacks</option>
-          <option value="ent">Entertainment</option>
-          <option value="tp">TP</option>
-        </select>
-      </div>
-
-      <div class="row gap8">
-        <button id="btnCheckPurchase" class="primaryBtn grow">
-          Check
-        </button>
-        <button
-          id="btnApplyPurchase"
-          class="ghostBtn grow"
-          disabled
-        >
-          Apply
-        </button>
-      </div>
-
-      <pre id="pOut" class="output"></pre>
-    </div>
-
-    <button id="btnClosePurchase" class="ghostBtn wideBtn">
-      Close
-    </button>
-  </section>
-
-  <!-- ================= NEW CHECK SHEET ================= -->
-  <section id="sheetNewCheck" class="sheet hidden">
-    <div class="sheetHandle"></div>
-    <div class="sheetTitle">New check</div>
-
-    <div class="card inset">
-      <input
-        id="cDeposit"
-        type="number"
-        step="0.01"
-        class="input"
-        placeholder="Deposit (net)"
-      />
-
-      <input
-        id="cNextPay"
-        type="date"
-        class="input"
-      />
-
-      <input
-        id="cDebt"
-        type="number"
-        step="0.01"
-        class="input"
-        placeholder="Total debt remaining"
-      />
-
-      <div class="row gap8">
-        <button id="btnPreviewCheck" class="primaryBtn grow">
-          Preview
-        </button>
-        <button
-          id="btnApplyCheck"
-          class="ghostBtn grow"
-          disabled
-        >
-          Apply
-        </button>
-      </div>
-
-      <pre id="cOut" class="output"></pre>
-    </div>
-
-    <button id="btnCloseNewCheck" class="ghostBtn wideBtn">
-      Close
-    </button>
-  </section>
-
-  <!-- ================= SCRIPTS ================= -->
-  <script src="app.js"></script>
-  <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js");
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return defaultState();
+      return { ...defaultState(), ...JSON.parse(raw) };
+    } catch {
+      return defaultState();
     }
-  </script>
+  }
 
-</body>
-</html>
+  let state = loadState();
+
+  function saveState() {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  }
+
+  /* ---------- PTO / workday logic ---------- */
+  function cleanExpiredPTO() {
+    const today = isoDay(new Date());
+    state.pto = (state.pto || []).filter((d) => d >= today);
+  }
+
+  // Weekends are workdays for you. Only Tue/Wed + PTO excluded.
+  function isExcludedWorkday(d) {
+    const dow = d.getDay(); // 0 Sun ... 6 Sat
+    if (state.excludeTue && dow === 2) return true;
+    if (state.excludeWed && dow === 3) return true;
+
+    const id = isoDay(d);
+    return (state.pto || []).includes(id);
+  }
+
+  function safeParseDate(yyyy_mm_dd) {
+    const dt = new Date(`${yyyy_mm_dd}T00:00:00`);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  function countWorkdays(fromDate, toDate) {
+    let count = 0;
+    const from = startOfDay(fromDate);
+    const to = startOfDay(toDate);
+
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      if (isoDay(d) === isoDay(from)) continue; // don't count today
+      if (!isExcludedWorkday(d)) count++;
+    }
+    return count;
+  }
+
+  /* ---------- TP protection helper ---------- */
+  function nextPayDateObjOrFallback() {
+    const nextPay = state.nextPayDate ? safeParseDate(state.nextPayDate) : null;
+    if (nextPay) return nextPay;
+
+    const d = new Date();
+    const fb = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    fb.setDate(fb.getDate() + 14);
+    return fb;
+  }
+
+  function hasUpcomingWednesdayBeforeNextPay() {
+    const today = startOfDay(new Date());
+    const nextPay = startOfDay(nextPayDateObjOrFallback());
+
+    for (let d = new Date(today); d <= nextPay; d.setDate(d.getDate() + 1)) {
+      if (isoDay(d) === isoDay(today)) continue;
+      if (d.getDay() === 3) return true;
+    }
+    return false;
+  }
+
+  /* ---------- Snack daily lock ---------- */
+  function ensureSnackDayLock(forceRecalc = false) {
+    cleanExpiredPTO();
+
+    const today = new Date();
+    const todayISO = isoDay(today);
+
+    if (!forceRecalc && state.snackLockedDate === todayISO) return;
+
+    state.snackLockedDate = todayISO;
+    if (!forceRecalc) state.snackSpentToday = 0;
+
+    if (isExcludedWorkday(today)) {
+      state.snackAllowanceToday = 0;
+      saveState();
+      return;
+    }
+
+    const nextPay = state.nextPayDate ? safeParseDate(state.nextPayDate) : null;
+
+    if (!nextPay) {
+      const fallbackWorkdays = 10;
+      state.snackAllowanceToday = fallbackWorkdays > 0 ? round2(state.snacks / fallbackWorkdays) : 0;
+      saveState();
+      return;
+    }
+
+    const workdaysLeft = countWorkdays(today, nextPay);
+    state.snackAllowanceToday = workdaysLeft > 0 ? round2(state.snacks / workdaysLeft) : 0;
+
+    saveState();
+  }
+
+  function snackRemainingToday() {
+    ensureSnackDayLock(false);
+    return Math.max(0, round2(state.snackAllowanceToday - state.snackSpentToday));
+  }
+
+  function daysLeftToNextPay() {
+    const nextPay = state.nextPayDate ? safeParseDate(state.nextPayDate) : null;
+    if (!nextPay) return 14;
+    return daysBetween(new Date(), nextPay);
+  }
+
+  /* ---------- UI render ---------- */
+  function setText(id, text) {
+    const el = $(id);
+    if (el) el.textContent = text;
+  }
+
+  function renderTopCards() {
+    ensureSnackDayLock(true);
+
+    setText("tSnackLeftToday", fmt(snackRemainingToday()));
+    setText("tSnackTodaySub", `Allowance today: ${fmt(state.snackAllowanceToday)}`);
+
+    setText("tEnt", fmt(state.ent));
+    setText("tTP", fmt(state.tp));
+
+    // optional fallback ids
+    setText("snackToday", fmt(snackRemainingToday()));
+    setText("snackAllowance", fmt(state.snackAllowanceToday));
+  }
+
+  /* ---------- Screens / Nav ---------- */
+  const screens = {
+    today: $("screenToday"),
+    history: $("screenHistory"),
+    calendar: $("screenCalendar"),
+    manage: $("screenManage"),
+  };
+
+  function switchScreen(name) {
+    Object.values(screens).forEach(hide);
+    show(screens[name]);
+
+    $$(".navBtn").forEach((b) => b.classList.remove("active"));
+    document.querySelector(`.navBtn[data-nav="${name}"]`)?.classList.add("active");
+
+    renderTopCards();
+  }
+
+  $$(".navBtn").forEach((btn) => btn.addEventListener("click", () => switchScreen(btn.dataset.nav)));
+
+  /* ---------- Sheets ---------- */
+  const overlay = $("overlay");
+  const sheetAdd = $("sheetAdd");
+  const sheetPurchase = $("sheetPurchase");
+  const sheetNewCheck = $("sheetNewCheck");
+
+  function openSheet(sheet) { show(overlay); show(sheet); }
+  function closeAllSheets() { hide(sheetAdd); hide(sheetPurchase); hide(sheetNewCheck); hide(overlay); }
+
+  $("btnAdd")?.addEventListener("click", () => openSheet(sheetAdd));
+  $("btnOpenPurchase")?.addEventListener("click", () => { hide(sheetAdd); openSheet(sheetPurchase); });
+  $("btnOpenNewCheck")?.addEventListener("click", () => { hide(sheetAdd); openSheet(sheetNewCheck); });
+  $("btnCloseSheet")?.addEventListener("click", closeAllSheets);
+  $("btnClosePurchase")?.addEventListener("click", closeAllSheets);
+  $("btnCloseNewCheck")?.addEventListener("click", closeAllSheets);
+  overlay?.addEventListener("click", closeAllSheets);
+
+  /* ---------- Caps helper ---------- */
+  function enforceCapsAndMoveOverflowToSavings() {
+    if (state.snacks > SNACKS_CAP) {
+      const overflow = round2(state.snacks - SNACKS_CAP);
+      state.snacks = SNACKS_CAP;
+      state.savings = round2(state.savings + overflow);
+      alert(`Snacks capped at ${fmt(SNACKS_CAP)}. Moved ${fmt(overflow)} to Savings.`);
+    }
+    if (state.ent > ENT_CAP) {
+      const overflow = round2(state.ent - ENT_CAP);
+      state.ent = ENT_CAP;
+      state.savings = round2(state.savings + overflow);
+      alert(`Entertainment capped at ${fmt(ENT_CAP)}. Moved ${fmt(overflow)} to Savings.`);
+    }
+  }
+
+  /* ---------- Settings (balances + payday + caps) ---------- */
+  $("btnSettings")?.addEventListener("click", () => {
+    const nextPay = prompt("Next paycheck date (YYYY-MM-DD):", state.nextPayDate || "");
+    if (nextPay !== null) state.nextPayDate = nextPay.trim();
+
+    const snacks = prompt(`Snacks balance (cap ${SNACKS_CAP}):`, String(state.snacks));
+    if (snacks !== null) state.snacks = round2(Number(snacks));
+
+    const ent = prompt(`Entertainment balance (cap ${ENT_CAP}):`, String(state.ent));
+    if (ent !== null) state.ent = round2(Number(ent));
+
+    const tp = prompt("TP balance:", String(state.tp));
+    if (tp !== null) state.tp = round2(Number(tp));
+
+    const savings = prompt("Savings balance:", String(state.savings));
+    if (savings !== null) state.savings = round2(Number(savings));
+
+    enforceCapsAndMoveOverflowToSavings();
+
+    state.snackLockedDate = "";
+    ensureSnackDayLock(true);
+    saveState();
+    renderTopCards();
+    alert("Saved.");
+  });
+
+  /* ---------- Purchase ---------- */
+  const pAmt = $("pAmt");
+  const pCat = $("pCat");
+  const pOut = $("pOut");
+  const btnCheck = $("btnCheckPurchase");
+  const btnApply = $("btnApplyPurchase");
+
+  let lastDecision = { ok: false, cat: "", amt: 0 };
+
+  function normalizeCat(v) {
+    return String(v || "").toLowerCase().trim(); // snacks, ent, tp
+  }
+
+  function decisionText(ok, remaining, daysLeft, willLast, reasonLine = "") {
+    return (
+`Answer: ${ok ? "yes" : "no"}
+Remaining budget: ${fmt(remaining)}
+How many days left till the next check: ${daysLeft}
+Will the budget last through till the next check: ${willLast ? "yes" : "no"}${reasonLine ? `\n${reasonLine}` : ""}`
+    );
+  }
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".quickBtn");
+    if (!btn) return;
+    if (!pAmt || !pCat) return;
+
+    pAmt.value = btn.dataset.quickamt || "";
+    pCat.value = btn.dataset.quickcat || "snacks";
+    pOut.textContent = "";
+    btnApply.disabled = true;
+    lastDecision = { ok: false, cat: "", amt: 0 };
+  });
+
+  btnCheck?.addEventListener("click", () => {
+    const amt = round2(Number(pAmt?.value || 0));
+    const cat = normalizeCat(pCat?.value);
+    const daysLeft = daysLeftToNextPay();
+
+    if (!amt || amt <= 0) {
+      pOut.textContent = decisionText(false, 0, daysLeft, false, "Reason: invalid amount");
+      btnApply.disabled = true;
+      lastDecision = { ok: false, cat, amt: 0 };
+      return;
+    }
+
+    let ok = false;
+    let remaining = 0;
+    let reason = "";
+
+    if (cat === "snacks") {
+      ensureSnackDayLock(true);
+      const todayExcluded = isExcludedWorkday(new Date());
+      const leftToday = snackRemainingToday();
+
+      if (todayExcluded) {
+        ok = false;
+        remaining = state.snacks;
+        reason = `Reason: excluded day (Tue/Wed/PTO). Today allowance = ${fmt(state.snackAllowanceToday)}`;
+      } else if (state.snacks <= 0) {
+        ok = false;
+        remaining = state.snacks;
+        reason = "Reason: snack balance is $0";
+      } else if (amt > leftToday) {
+        ok = false;
+        remaining = state.snacks;
+        reason = `Reason: over daily limit. Left today = ${fmt(leftToday)} (Spent today = ${fmt(state.snackSpentToday)})`;
+      } else if (amt > state.snacks) {
+        ok = false;
+        remaining = state.snacks;
+        reason = `Reason: over snack balance (${fmt(state.snacks)})`;
+      } else {
+        ok = true;
+        remaining = round2(state.snacks - amt);
+        if (state.snacks >= SNACKS_CAP) {
+          reason = `Note: snacks are capped at ${fmt(SNACKS_CAP)} (overflow goes to savings when funding).`;
+        }
+      }
+    } else if (cat === "ent") {
+      if (state.ent <= 0) {
+        ok = false;
+        remaining = state.ent;
+        reason = "Reason: entertainment balance is $0";
+      } else if (amt > state.ent) {
+        ok = false;
+        remaining = state.ent;
+        reason = `Reason: over entertainment balance (${fmt(state.ent)})`;
+      } else {
+        ok = true;
+        remaining = round2(state.ent - amt);
+        if (state.ent >= ENT_CAP) {
+          reason = `Note: entertainment is capped at ${fmt(ENT_CAP)} (overflow goes to savings when funding).`;
+        }
+      }
+    } else if (cat === "tp") {
+      const projected = round2(state.tp - amt);
+
+      if (state.tp <= 0) {
+        ok = false;
+        remaining = state.tp;
+        reason = "Reason: TP balance is $0";
+      } else if (amt > state.tp) {
+        ok = false;
+        remaining = state.tp;
+        reason = `Reason: over TP balance (${fmt(state.tp)})`;
+      } else {
+        const hasWed = hasUpcomingWednesdayBeforeNextPay();
+        if (hasWed && projected < 15) {
+          ok = false;
+          remaining = state.tp;
+          reason = `Reason: TP protection — upcoming Wednesday before next check requires TP >= ${fmt(15)}. After purchase would be ${fmt(projected)}`;
+        } else {
+          ok = true;
+          remaining = projected;
+        }
+      }
+    } else {
+      ok = false;
+      remaining = 0;
+      reason = "Reason: unknown category";
+    }
+
+    pOut.textContent = decisionText(ok, remaining, daysLeft, ok, reason);
+    btnApply.disabled = !ok;
+    lastDecision = { ok, cat, amt };
+  });
+
+  btnApply?.addEventListener("click", () => {
+    if (!lastDecision.ok) return;
+
+    const { cat, amt } = lastDecision;
+
+    if (cat === "snacks") {
+      ensureSnackDayLock(true);
+      state.snacks = round2(state.snacks - amt);
+      state.snackSpentToday = round2(state.snackSpentToday + amt);
+    } else if (cat === "ent") {
+      state.ent = round2(state.ent - amt);
+    } else if (cat === "tp") {
+      state.tp = round2(state.tp - amt);
+    }
+
+    saveState();
+    renderTopCards();
+
+    if (pAmt) pAmt.value = "";
+    if (pOut) pOut.textContent = "";
+    btnApply.disabled = true;
+    lastDecision = { ok: false, cat: "", amt: 0 };
+
+    alert("Applied.");
+  });
+
+  /* ---------- New Check Preview (restored) ---------- */
+  const cDeposit = $("cDeposit");
+  const cNextPay = $("cNextPay");
+  const cDebt = $("cDebt");
+  const cOut = $("cOut");
+  const btnPreviewCheck = $("btnPreviewCheck");
+  const btnApplyCheck = $("btnApplyCheck");
+
+  btnPreviewCheck?.addEventListener("click", () => {
+    const deposit = round2(Number(cDeposit?.value || 0));
+    const debt = round2(Number(cDebt?.value || 0));
+    const nextPay = (cNextPay?.value || "").trim();
+
+    if (!deposit || deposit <= 0 || !nextPay) {
+      if (cOut) cOut.textContent = "Please enter a valid deposit and next paycheck date.";
+      if (btnApplyCheck) btnApplyCheck.disabled = true;
+      return;
+    }
+
+    // Preview only — no balances are changed
+    if (cOut) {
+      cOut.textContent =
+`NEW CHECK PREVIEW
+
+Deposit: ${fmt(deposit)}
+Next paycheck: ${nextPay}
+Debt (reported): ${fmt(debt)}
+
+(Caps in effect: Snacks ${fmt(SNACKS_CAP)}, Entertainment ${fmt(ENT_CAP)})
+(No balances have been changed)`;
+    }
+
+    // Still disabled until we explicitly wire apply later
+    if (btnApplyCheck) btnApplyCheck.disabled = true;
+  });
+
+  btnApplyCheck?.addEventListener("click", () => {
+    alert("Apply not enabled yet.");
+  });
+
+  /* ---------- Init ---------- */
+  renderTopCards();
+  switchScreen("today");
+  setInterval(renderTopCards, 10000);
+});
