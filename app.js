@@ -321,12 +321,20 @@ window.addEventListener("DOMContentLoaded", () => {
   $("btnCloseSheetNewCheck")?.addEventListener("click", closeAllSheets);
   sheetOverlay?.addEventListener("click", closeAllSheets);
 
-  /* ---------- Purchase ---------- */
-  const pAmt = $("pAmt");
-  const pCat = $("pCat");
-  const pOut = $("pOut");
-  const btnCheckPurchase = $("btnCheckPurchase");
-  const btnApplyPurchase = $("btnApplyPurchase");
+  /* ---------- Purchase (DOM hookup) ---------- */
+const pAmt = $("purchaseAmount");
+const pCat = $("purchaseCategory");
+const pOut = $("purchaseDecision");
+const btnCheck = $("btnCheckPurchase");
+const btnApply = $("btnApplyPurchase");
+
+/* ---------- New Check Preview (DOM hookup) ---------- */
+const cDeposit = $("checkDeposit");
+const cNextPay = $("checkPayday");     // date input in HTML
+const cDebt = $("checkDebt");
+const cOut = $("checkPreviewOut");
+const btnPreviewCheck = $("btnPreviewCheck");
+const btnApplyCheck = $("btnApplyCheck");
 
   let lastDecision = { ok: false, cat: "", amt: 0 };
 
