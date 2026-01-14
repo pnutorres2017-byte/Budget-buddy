@@ -1,5 +1,5 @@
 /* ===============================
-   Budget Buddy – Navigation + Purchase + New Check Preview
+   Budget Buddy – Snack Rules Wired
    =============================== */
 
 console.log("Budget Buddy loaded", new Date().toISOString());
@@ -11,12 +11,74 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function show(el) { el.classList.remove("hidden"); }
   function hide(el) { el.classList.add("hidden"); }
+  function money(n) { return `$${Number(n).toFixed(2)}`; }
 
-  function money(n) {
-    return `$${Number(n).toFixed(2)}`;
+  /* ---------- Date Helpers ---------- */
+  function todayKey() {
+    return new Date().toISOString().slice(0, 10);
   }
 
-  /* ---------- Screens ---------- */
+  function isTuesday(d) { return d.getDay() === 2; }
+  function isWednesday(d) { return d.getDay() === 3; }
+
+  /* ---------- State ---------- */
+  const state = JSON.parse(localStorage.getItem("bb_state") || "{}");
+
+  state.snacks = state.snacks ?? 75; // TEMP starting balance
+  state.snackSpentByDate = state.snackSpentByDate ?? {};
+  state.excludeTue = state.excludeTue ?? true;
+  state.excludeWed = state.excludeWed ?? true;
+  state.pto = state.pto ?? [];
+
+  function saveState() {
+    localStorage.setItem("bb_state", JSON.stringify(state));
+  }
+
+  /* ---------- Workday Logic ---------- */
+  function isWorkday(date) {
+    const iso = date.toISOString().slice(0, 10);
+    if (state.pto.includes(iso)) return false;
+    if (state.excludeTue && isTuesday(date)) return false;
+    if (state.excludeWed && isWednesday(date)) return false;
+    return true;
+  }
+
+  function countRemainingWorkdays(days = 14) {
+    let count = 0;
+    const d = new Date();
+    for (let i = 0; i < days; i++) {
+      const test = new Date(d);
+      test.setDate(d.getDate() + i);
+      if (isWorkday(test)) count++;
+    }
+    return Math.max(count, 1);
+  }
+
+  /* ---------- Snack Daily Math ---------- */
+  function snackAllowanceToday() {
+    const workdaysLeft = countRemainingWorkdays();
+    return state.snacks / workdaysLeft;
+  }
+
+  function snackSpentToday() {
+    return state.snackSpentByDate[todayKey()] ?? 0;
+  }
+
+  function snackRemainingToday() {
+    return Math.max(snackAllowanceToday() - snackSpentToday(), 0);
+  }
+
+  function updateSnackUI() {
+    $("tSnackLeftToday").textContent = money(snackRemainingToday());
+    $("tSnackTodaySub").textContent =
+      `Allowance today: ${money(snackAllowanceToday())}`;
+    $("tSnacksFull").textContent = money(state.snacks);
+  }
+
+  /* ===============================
+     NAVIGATION (unchanged)
+     =============================== */
+
   const screens = {
     today: $("screenToday"),
     history: $("screenHistory"),
@@ -29,16 +91,16 @@ window.addEventListener("DOMContentLoaded", () => {
     if (screens[name]) show(screens[name]);
 
     $$(".navBtn").forEach((b) => b.classList.remove("active"));
-    const active = document.querySelector(`.navBtn[data-nav="${name}"]`);
-    if (active) active.classList.add("active");
+    document
+      .querySelector(`.navBtn[data-nav="${name}"]`)
+      ?.classList.add("active");
   }
 
-  /* ---------- Bottom Nav ---------- */
   $$(".navBtn").forEach((btn) => {
     btn.addEventListener("click", () => switchScreen(btn.dataset.nav));
   });
 
-  /* ---------- Overlay + Sheets ---------- */
+  /* ---------- Sheets ---------- */
   const overlay = $("overlay");
   const sheetAdd = $("sheetAdd");
   const sheetPurchase = $("sheetPurchase");
@@ -56,138 +118,103 @@ window.addEventListener("DOMContentLoaded", () => {
     hide(overlay);
   }
 
-  /* ---------- FAB (+) ---------- */
-  $("btnAdd")?.addEventListener("click", () => openSheet(sheetAdd));
-
-  $("btnOpenPurchase")?.addEventListener("click", () => {
+  $("btnAdd").onclick = () => openSheet(sheetAdd);
+  $("btnOpenPurchase").onclick = () => {
     hide(sheetAdd);
     openSheet(sheetPurchase);
-  });
-
-  $("btnOpenNewCheck")?.addEventListener("click", () => {
+  };
+  $("btnOpenNewCheck").onclick = () => {
     hide(sheetAdd);
     openSheet(sheetNewCheck);
-  });
+  };
 
-  $("btnCloseSheet")?.addEventListener("click", closeAllSheets);
-  $("btnClosePurchase")?.addEventListener("click", closeAllSheets);
-  $("btnCloseNewCheck")?.addEventListener("click", closeAllSheets);
-  overlay?.addEventListener("click", closeAllSheets);
-
-  /* ---------- Settings ---------- */
-  $("btnSettings")?.addEventListener("click", () => {
-    alert("Settings wiring later");
-  });
+  $("btnCloseSheet").onclick =
+    $("btnClosePurchase").onclick =
+    $("btnCloseNewCheck").onclick =
+    overlay.onclick =
+      closeAllSheets;
 
   /* ===============================
-     PURCHASE (already working)
+     PURCHASE – REAL SNACK RULES
      =============================== */
 
   const pAmt = $("pAmt");
   const pCat = $("pCat");
   const pOut = $("pOut");
-  const btnCheckPurchase = $("btnCheckPurchase");
-  const btnApplyPurchase = $("btnApplyPurchase");
+  const btnCheck = $("btnCheckPurchase");
+  const btnApply = $("btnApplyPurchase");
 
   document.addEventListener("click", (e) => {
     const btn = e.target.closest(".quickBtn");
     if (!btn) return;
-
     pAmt.value = btn.dataset.quickamt;
     pCat.value = btn.dataset.quickcat;
     pOut.textContent = "";
-    btnApplyPurchase.disabled = true;
+    btnApply.disabled = true;
   });
 
-  btnCheckPurchase?.addEventListener("click", () => {
+  btnCheck.onclick = () => {
     const amt = Number(pAmt.value);
+    const cat = pCat.value;
 
     if (!amt || amt <= 0) {
       pOut.textContent = "Answer: no\nReason: invalid amount";
-      btnApplyPurchase.disabled = true;
+      btnApply.disabled = true;
       return;
+    }
+
+    if (cat === "snacks") {
+      const today = new Date();
+      if (!isWorkday(today)) {
+        pOut.textContent =
+`Answer: no
+Reason: snacks only allowed on workdays`;
+        btnApply.disabled = true;
+        return;
+      }
+
+      if (amt > snackRemainingToday()) {
+        pOut.textContent =
+`Answer: no
+Remaining budget: ${money(snackRemainingToday())}
+How many days left till the next check: —
+Will the budget last through till the next check: yes`;
+        btnApply.disabled = true;
+        return;
+      }
     }
 
     pOut.textContent =
 `Answer: yes
-Remaining budget: (not calculated yet)
-How many days left till the next check: 14
+Remaining budget: ${cat === "snacks"
+  ? money(snackRemainingToday() - amt)
+  : "(not enforced yet)"}
+How many days left till the next check: —
 Will the budget last through till the next check: yes`;
 
-    btnApplyPurchase.disabled = false;
-  });
+    btnApply.disabled = false;
+  };
 
-  btnApplyPurchase?.addEventListener("click", () => {
-    alert("Purchase applied (simulation only)");
-    pAmt.value = "";
-    pOut.textContent = "";
-    btnApplyPurchase.disabled = true;
-  });
+  btnApply.onclick = () => {
+    const amt = Number(pAmt.value);
+    const cat = pCat.value;
 
-  /* ===============================
-     NEW CHECK – PREVIEW ONLY
-     =============================== */
-
-  const cDeposit = $("cDeposit");
-  const cNextPay = $("cNextPay");
-  const cDebt = $("cDebt");
-  const cOut = $("cOut");
-  const btnPreviewCheck = $("btnPreviewCheck");
-  const btnApplyCheck = $("btnApplyCheck");
-
-  btnPreviewCheck?.addEventListener("click", () => {
-    const deposit = Number(cDeposit.value);
-    const debt = Number(cDebt.value);
-    const nextPay = cNextPay.value;
-
-    if (!deposit || deposit <= 0 || !nextPay) {
-      cOut.textContent = "Please enter a valid deposit and next paycheck date.";
-      btnApplyCheck.disabled = true;
-      return;
+    if (cat === "snacks") {
+      state.snackSpentByDate[todayKey()] =
+        snackSpentToday() + amt;
+      state.snacks -= amt;
+      saveState();
+      updateSnackUI();
     }
 
-    // Placeholder assumptions (safe)
-    const billsDue = 0;
-    const savings = deposit * 0.3;
-    const tp = 50;
-    const snacks = 75;
-    const entertainment = 75;
+    alert(`Applied ${cat} purchase: ${money(amt)}`);
 
-    const allocated =
-      billsDue + savings + tp + snacks + entertainment;
-
-    const remainder = deposit - allocated;
-
-    cOut.textContent =
-`NEW CHECK PREVIEW
-
-Deposit: ${money(deposit)}
-Next paycheck: ${nextPay}
-
-Bills due before next check:
-${money(billsDue)}
-
-Proposed split:
-Savings: ${money(savings)}
-TP fund: ${money(tp)}
-Snacks: ${money(snacks)}
-Entertainment: ${money(entertainment)}
-
-Debt remaining (reported): ${money(debt)}
-
-Unallocated remainder:
-${money(remainder)}
-
-(No balances have been changed)`;
-
-    btnApplyCheck.disabled = false;
-  });
-
-  // Apply still disabled on purpose
-  btnApplyCheck?.addEventListener("click", () => {
-    alert("Apply will be enabled in a later step");
-  });
+    pAmt.value = "";
+    pOut.textContent = "";
+    btnApply.disabled = true;
+  };
 
   /* ---------- Init ---------- */
+  updateSnackUI();
   switchScreen("today");
 });
