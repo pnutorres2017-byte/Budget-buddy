@@ -1,144 +1,160 @@
-<!-- SETTINGS MODAL -->
-<div id="settingsOverlay" class="overlay hidden"></div>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Budget Buddy</title>
 
-<div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-  <div class="modalHeader">
-    <button id="btnSettingsClose" class="iconBtn" aria-label="Close settings">✕</button>
-    <div class="modalTitleWrap">
-      <div id="settingsTitle" class="modalTitle">Settings</div>
-      <div class="modalSubtitle">Adjust balances, rules, and caps</div>
+  <!-- CSS -->
+  <link rel="stylesheet" href="./styles.css" />
+
+  <!-- PWA (optional if you already have these files) -->
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#ff6a00" />
+</head>
+
+<body>
+
+  <!-- APP ROOT (keep your existing app layout here) -->
+  <div id="app">
+    <!-- If you already have your screens/nav markup in your repo,
+         paste it here ABOVE the settings modal.
+         For now, we leave it as-is so the page loads cleanly. -->
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settingsOverlay" class="overlay hidden"></div>
+
+  <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modalHeader">
+      <button id="btnSettingsClose" class="iconBtn" aria-label="Close settings">✕</button>
+      <div class="modalTitleWrap">
+        <div id="settingsTitle" class="modalTitle">Settings</div>
+        <div class="modalSubtitle">Adjust balances, rules, and caps</div>
+      </div>
+    </div>
+
+    <div class="tabBar">
+      <button class="tabBtn active" data-tab="tabBalances">Starting Balances</button>
+      <button class="tabBtn" data-tab="tabSplits">Split Rules</button>
+      <button class="tabBtn" data-tab="tabCaps">Max Balances</button>
+      <button class="tabBtn" data-tab="tabAdvanced">Advanced</button>
+    </div>
+
+    <div class="tabContent">
+      <!-- TAB: STARTING BALANCES -->
+      <section id="tabBalances" class="tabPanel">
+        <div class="formGrid">
+          <label class="field">
+            <span>Next paycheck date</span>
+            <input id="setNextPayDate" type="date" />
+          </label>
+
+          <label class="field">
+            <span>Snacks balance</span>
+            <input id="setSnacks" type="number" inputmode="decimal" step="0.01" />
+          </label>
+
+          <label class="field">
+            <span>Entertainment balance</span>
+            <input id="setEnt" type="number" inputmode="decimal" step="0.01" />
+          </label>
+
+          <label class="field">
+            <span>TP balance</span>
+            <input id="setTP" type="number" inputmode="decimal" step="0.01" />
+          </label>
+
+          <label class="field">
+            <span>Savings balance</span>
+            <input id="setSavings" type="number" inputmode="decimal" step="0.01" />
+          </label>
+        </div>
+
+        <div class="actionsRow">
+          <button id="btnSettingsSaveBalances" class="primaryBtn">Save</button>
+          <button id="btnSettingsRecalcSnack" class="secondaryBtn">Recalc today’s snack limit</button>
+        </div>
+
+        <div class="helperNote">
+          Use this if balances ever get out of sync. Saving updates your stored state.
+        </div>
+      </section>
+
+      <!-- TAB: SPLIT RULES (placeholder for later wiring) -->
+      <section id="tabSplits" class="tabPanel hidden">
+        <div class="helperNote">
+          Split Rules will be wired after New Check → Apply is enabled.
+        </div>
+      </section>
+
+      <!-- TAB: MAX BALANCES -->
+      <section id="tabCaps" class="tabPanel hidden">
+        <div class="formGrid">
+          <label class="field inlineField">
+            <span>Enable caps</span>
+            <input id="capEnable" type="checkbox" checked />
+          </label>
+
+          <label class="field inlineField">
+            <span>Overflow → Savings</span>
+            <input id="capOverflowToSavings" type="checkbox" checked />
+          </label>
+
+          <label class="field">
+            <span>Snacks cap</span>
+            <input id="capSnacks" type="number" inputmode="decimal" step="0.01" value="75" />
+          </label>
+
+          <label class="field">
+            <span>Entertainment cap</span>
+            <input id="capEnt" type="number" inputmode="decimal" step="0.01" value="75" />
+          </label>
+
+          <label class="field">
+            <span>TP cap</span>
+            <input id="capTP" type="number" inputmode="decimal" step="0.01" value="100" />
+          </label>
+        </div>
+
+        <div class="helperNote">
+          Caps are hard cutoffs. If overflow is enabled, extra goes into Savings.
+        </div>
+
+        <div class="actionsRow">
+          <button id="btnSettingsSaveCaps" class="primaryBtn">Save caps</button>
+        </div>
+      </section>
+
+      <!-- TAB: ADVANCED -->
+      <section id="tabAdvanced" class="tabPanel hidden">
+        <div class="formGrid">
+          <label class="field inlineField">
+            <span>Exclude Tuesdays (no snack allowance)</span>
+            <input id="advExcludeTue" type="checkbox" checked />
+          </label>
+
+          <label class="field inlineField">
+            <span>Exclude Wednesdays (no snack allowance)</span>
+            <input id="advExcludeWed" type="checkbox" checked />
+          </label>
+        </div>
+
+        <div class="actionsRow">
+          <button id="btnSettingsSaveAdvanced" class="primaryBtn">Save advanced</button>
+        </div>
+      </section>
     </div>
   </div>
 
-  <div class="tabBar">
-    <button class="tabBtn active" data-tab="tabBalances">Starting Balances</button>
-    <button class="tabBtn" data-tab="tabSplits">Split Rules</button>
-    <button class="tabBtn" data-tab="tabCaps">Max Balances</button>
-    <button class="tabBtn" data-tab="tabAdvanced">Advanced</button>
-  </div>
+  <!-- JS -->
+  <script src="./app.js" defer></script>
 
-  <div class="tabContent">
-    <!-- TAB: STARTING BALANCES -->
-    <section id="tabBalances" class="tabPanel">
-      <div class="formGrid">
-        <label class="field">
-          <span>Next paycheck date</span>
-          <input id="setNextPayDate" type="date" />
-        </label>
-
-        <label class="field">
-          <span>Snacks balance</span>
-          <input id="setSnacks" type="number" inputmode="decimal" step="0.01" />
-        </label>
-
-        <label class="field">
-          <span>Entertainment balance</span>
-          <input id="setEnt" type="number" inputmode="decimal" step="0.01" />
-        </label>
-
-        <label class="field">
-          <span>TP balance</span>
-          <input id="setTP" type="number" inputmode="decimal" step="0.01" />
-        </label>
-
-        <label class="field">
-          <span>Savings balance</span>
-          <input id="setSavings" type="number" inputmode="decimal" step="0.01" />
-        </label>
-      </div>
-
-      <div class="actionsRow">
-        <button id="btnSettingsSaveBalances" class="primaryBtn">Save</button>
-        <button id="btnSettingsRecalcSnack" class="secondaryBtn">Recalc today’s snack limit</button>
-      </div>
-
-      <div class="helperNote">
-        Use this if balances ever get out of sync. Saving updates your stored state.
-      </div>
-    </section>
-
-    <!-- TAB: SPLIT RULES (placeholder for later wiring) -->
-    <section id="tabSplits" class="tabPanel hidden">
-      <div class="helperNote">
-        Split Rules will be wired after New Check → Apply is enabled.
-      </div>
-
-      <div class="formGrid">
-        <label class="field">
-          <span>Snacks cap funding style</span>
-          <select disabled>
-            <option selected>Caps block overflow → Savings</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>TP Wednesday protection</span>
-          <select disabled>
-            <option selected>Enabled</option>
-          </select>
-        </label>
-      </div>
-    </section>
-
-    <!-- TAB: MAX BALANCES -->
-    <section id="tabCaps" class="tabPanel hidden">
-      <div class="formGrid">
-        <label class="field inlineField">
-          <span>Enable caps</span>
-          <input id="capEnable" type="checkbox" checked />
-        </label>
-
-        <label class="field inlineField">
-          <span>Overflow → Savings</span>
-          <input id="capOverflowToSavings" type="checkbox" checked />
-        </label>
-
-        <label class="field">
-          <span>Snacks cap</span>
-          <input id="capSnacks" type="number" inputmode="decimal" step="0.01" value="75" />
-        </label>
-
-        <label class="field">
-          <span>Entertainment cap</span>
-          <input id="capEnt" type="number" inputmode="decimal" step="0.01" value="75" />
-        </label>
-
-        <label class="field">
-          <span>TP cap</span>
-          <input id="capTP" type="number" inputmode="decimal" step="0.01" value="100" />
-        </label>
-      </div>
-
-      <div class="helperNote">
-        Caps are “hard” — extra money won’t sit in the fund. If overflow is enabled, it gets pushed into Savings.
-      </div>
-
-      <div class="actionsRow">
-        <button id="btnSettingsSaveCaps" class="primaryBtn">Save caps</button>
-      </div>
-    </section>
-
-    <!-- TAB: ADVANCED -->
-    <section id="tabAdvanced" class="tabPanel hidden">
-      <div class="formGrid">
-        <label class="field inlineField">
-          <span>Exclude Tuesdays (no snack allowance)</span>
-          <input id="advExcludeTue" type="checkbox" checked />
-        </label>
-
-        <label class="field inlineField">
-          <span>Exclude Wednesdays (no snack allowance)</span>
-          <input id="advExcludeWed" type="checkbox" checked />
-        </label>
-      </div>
-
-      <div class="helperNote">
-        PTO management stays in the Calendar tab. Import/Export will live here later.
-      </div>
-
-      <div class="actionsRow">
-        <button id="btnSettingsSaveAdvanced" class="primaryBtn">Save advanced</button>
-      </div>
-    </section>
-  </div>
-</div>
+  <!-- Service worker (optional; only if you already had this in your old index) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
