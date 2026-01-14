@@ -4,7 +4,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const $ = (id) => document.getElementById(id);
   const $$ = (sel) => document.querySelectorAll(sel);
 
-  const STORE_KEY = "bb_state_v7";
+  const STORE_KEY = "bb_state_v8";
 
   // Caps (until configurable in Settings tabs)
   const ENT_CAP = 75;
@@ -171,6 +171,7 @@ window.addEventListener("DOMContentLoaded", () => {
     setText("tEnt", fmt(state.ent));
     setText("tTP", fmt(state.tp));
 
+    // optional fallback ids
     setText("snackToday", fmt(snackRemainingToday()));
     setText("snackAllowance", fmt(state.snackAllowanceToday));
   }
@@ -212,17 +213,14 @@ window.addEventListener("DOMContentLoaded", () => {
   $("btnCloseNewCheck")?.addEventListener("click", closeAllSheets);
   overlay?.addEventListener("click", closeAllSheets);
 
-  /* ---------- Apply caps helper ---------- */
+  /* ---------- Caps helper ---------- */
   function enforceCapsAndMoveOverflowToSavings() {
-    // Snacks cap
     if (state.snacks > SNACKS_CAP) {
       const overflow = round2(state.snacks - SNACKS_CAP);
       state.snacks = SNACKS_CAP;
       state.savings = round2(state.savings + overflow);
       alert(`Snacks capped at ${fmt(SNACKS_CAP)}. Moved ${fmt(overflow)} to Savings.`);
     }
-
-    // Entertainment cap
     if (state.ent > ENT_CAP) {
       const overflow = round2(state.ent - ENT_CAP);
       state.ent = ENT_CAP;
@@ -331,6 +329,9 @@ Will the budget last through till the next check: ${willLast ? "yes" : "no"}${re
       } else {
         ok = true;
         remaining = round2(state.snacks - amt);
+        if (state.snacks >= SNACKS_CAP) {
+          reason = `Note: snacks are capped at ${fmt(SNACKS_CAP)} (overflow goes to savings when funding).`;
+        }
       }
     } else if (cat === "ent") {
       if (state.ent <= 0) {
@@ -399,12 +400,52 @@ Will the budget last through till the next check: ${willLast ? "yes" : "no"}${re
     saveState();
     renderTopCards();
 
-    pAmt.value = "";
-    pOut.textContent = "";
+    if (pAmt) pAmt.value = "";
+    if (pOut) pOut.textContent = "";
     btnApply.disabled = true;
     lastDecision = { ok: false, cat: "", amt: 0 };
 
     alert("Applied.");
+  });
+
+  /* ---------- New Check Preview (restored) ---------- */
+  const cDeposit = $("cDeposit");
+  const cNextPay = $("cNextPay");
+  const cDebt = $("cDebt");
+  const cOut = $("cOut");
+  const btnPreviewCheck = $("btnPreviewCheck");
+  const btnApplyCheck = $("btnApplyCheck");
+
+  btnPreviewCheck?.addEventListener("click", () => {
+    const deposit = round2(Number(cDeposit?.value || 0));
+    const debt = round2(Number(cDebt?.value || 0));
+    const nextPay = (cNextPay?.value || "").trim();
+
+    if (!deposit || deposit <= 0 || !nextPay) {
+      if (cOut) cOut.textContent = "Please enter a valid deposit and next paycheck date.";
+      if (btnApplyCheck) btnApplyCheck.disabled = true;
+      return;
+    }
+
+    // Preview only — no balances are changed
+    if (cOut) {
+      cOut.textContent =
+`NEW CHECK PREVIEW
+
+Deposit: ${fmt(deposit)}
+Next paycheck: ${nextPay}
+Debt (reported): ${fmt(debt)}
+
+(Caps in effect: Snacks ${fmt(SNACKS_CAP)}, Entertainment ${fmt(ENT_CAP)})
+(No balances have been changed)`;
+    }
+
+    // Still disabled until we explicitly wire apply later
+    if (btnApplyCheck) btnApplyCheck.disabled = true;
+  });
+
+  btnApplyCheck?.addEventListener("click", () => {
+    alert("Apply not enabled yet.");
   });
 
   /* ---------- Init ---------- */
