@@ -14,13 +14,22 @@ window.addEventListener("DOMContentLoaded", () => {
   function hide(el) { el?.classList.add("hidden"); }
 // ---------- Screen rendering / bottom nav ----------
 function setActiveNav(screenId) {
-  $$(".bottomNav .navBtn, .bottomNav .navAdd").forEach((b) => b.classList.remove("active"));
+  $$(".bottomNav .navBtn").forEach((b) => b.classList.remove("active"));
+
   const btn = document.querySelector(`.bottomNav [data-screen="${screenId}"]`);
   if (btn) btn.classList.add("active");
+}
+function switchScreen(screenId) {
 $$(".bottomNav [data-screen]").forEach((btn) => {
   btn.addEventListener("click", () => {
     switchScreen(btn.getAttribute("data-screen"));
   });
+  $$(".bottomNav [data-screen]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    switchScreen(btn.getAttribute("data-screen"));
+  });
+});
+
 });
   switchScreen("screenToday");
 }
