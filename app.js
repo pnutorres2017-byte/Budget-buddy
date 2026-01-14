@@ -1,5 +1,5 @@
 /* ===============================
-   Budget Buddy – Navigation Wiring
+   Budget Buddy – Navigation + Purchase Wiring
    =============================== */
 
 console.log("Budget Buddy loaded", new Date().toISOString());
@@ -8,13 +8,8 @@ console.log("Budget Buddy loaded", new Date().toISOString());
 const $ = (id) => document.getElementById(id);
 const $$ = (sel) => document.querySelectorAll(sel);
 
-function show(el) {
-  el.classList.remove("hidden");
-}
-
-function hide(el) {
-  el.classList.add("hidden");
-}
+function show(el) { el.classList.remove("hidden"); }
+function hide(el) { el.classList.add("hidden"); }
 
 /* ---------- Screens ---------- */
 const screens = {
@@ -44,7 +39,6 @@ $$(".navBtn").forEach((btn) => {
 
 /* ---------- Overlay + Sheets ---------- */
 const overlay = $("overlay");
-
 const sheetAdd = $("sheetAdd");
 const sheetPurchase = $("sheetPurchase");
 const sheetNewCheck = $("sheetNewCheck");
@@ -62,38 +56,88 @@ function closeAllSheets() {
 }
 
 /* ---------- FAB (+) ---------- */
-$("btnAdd").addEventListener("click", () => {
-  openSheet(sheetAdd);
-  console.log("Opened Add sheet");
-});
+$("btnAdd").addEventListener("click", () => openSheet(sheetAdd));
 
-/* ---------- Add Sheet ---------- */
 $("btnOpenPurchase").addEventListener("click", () => {
   hide(sheetAdd);
   openSheet(sheetPurchase);
-  console.log("Opened Purchase sheet");
 });
 
 $("btnOpenNewCheck").addEventListener("click", () => {
   hide(sheetAdd);
   openSheet(sheetNewCheck);
-  console.log("Opened New Check sheet");
 });
 
 $("btnCloseSheet").addEventListener("click", closeAllSheets);
-
-/* ---------- Purchase Sheet ---------- */
 $("btnClosePurchase").addEventListener("click", closeAllSheets);
-
-/* ---------- New Check Sheet ---------- */
 $("btnCloseNewCheck").addEventListener("click", closeAllSheets);
-
-/* ---------- Overlay ---------- */
 overlay.addEventListener("click", closeAllSheets);
 
 /* ---------- Settings ---------- */
 $("btnSettings").addEventListener("click", () => {
-  alert("Settings coming next");
+  alert("Settings wiring next");
+});
+
+/* ===============================
+   PURCHASE WIRING (SAFE MODE)
+   =============================== */
+
+const pAmt = $("pAmt");
+const pCat = $("pCat");
+const pOut = $("pOut");
+const btnCheck = $("btnCheckPurchase");
+const btnApply = $("btnApplyPurchase");
+
+/* Quick purchase buttons */
+$$(".quickBtn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    pAmt.value = btn.dataset.quickamt;
+    pCat.value = btn.dataset.quickcat;
+    pOut.textContent = "";
+    btnApply.disabled = true;
+
+    console.log("Quick purchase selected", btn.dataset.quickcat, btn.dataset.quickamt);
+  });
+});
+
+/* Check purchase */
+btnCheck.addEventListener("click", () => {
+  const amt = parseFloat(pAmt.value);
+  const cat = pCat.value;
+
+  if (!amt || amt <= 0) {
+    pOut.textContent = "Answer: no\nReason: invalid amount";
+    btnApply.disabled = true;
+    return;
+  }
+
+  // TEMP RULE: allow all purchases for now
+  const daysLeft = 14; // placeholder
+  const willLast = true;
+
+  pOut.textContent =
+`Answer: yes
+Remaining budget: (not calculated yet)
+How many days left till the next check: ${daysLeft}
+Will the budget last through till the next check: ${willLast ? "yes" : "no"}`;
+
+  btnApply.disabled = false;
+
+  console.log("Purchase checked", { amt, cat });
+});
+
+/* Apply purchase (no money moves yet) */
+btnApply.addEventListener("click", () => {
+  const amt = parseFloat(pAmt.value);
+  const cat = pCat.value;
+
+  alert(`Applied ${cat} purchase: $${amt.toFixed(2)} (simulation only)`);
+
+  console.log("Purchase applied (simulated)", { amt, cat });
+
+  pAmt.value = "";
+  pOut.textContent = "";
+  btnApply.disabled = true;
 });
 
 /* ---------- Init ---------- */
