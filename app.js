@@ -13,25 +13,12 @@ window.addEventListener("DOMContentLoaded", () => {
   function show(el) { el?.classList.remove("hidden"); }
   function hide(el) { el?.classList.add("hidden"); }
 // ---------- Screen rendering / bottom nav ----------
+// ----------- Screen rendering / bottom nav -----------
+
 function setActiveNav(screenId) {
   $$(".bottomNav .navBtn").forEach((b) => b.classList.remove("active"));
-
   const btn = document.querySelector(`.bottomNav [data-screen="${screenId}"]`);
   if (btn) btn.classList.add("active");
-}
-function switchScreen(screenId) {
-$$(".bottomNav [data-screen]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    switchScreen(btn.getAttribute("data-screen"));
-  });
-  $$(".bottomNav [data-screen]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    switchScreen(btn.getAttribute("data-screen"));
-  });
-});
-
-});
-  switchScreen("screenToday");
 }
 
 function switchScreen(screenId) {
@@ -41,12 +28,21 @@ function switchScreen(screenId) {
 
   setActiveNav(screenId);
 
-  // Re-render after switching
+  // Re-render after switching (safe no-ops if not defined)
   if (typeof renderTopCards === "function") renderTopCards();
   if (typeof renderScreen === "function") renderScreen(screenId);
 }
 
-function renderScreen(screenId) {
+// Bind bottom nav ONCE
+$$(".bottomNav [data-screen]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    switchScreen(btn.getAttribute("data-screen"));
+  });
+});
+
+// Initial screen
+switchScreen("screenToday");
+
   // Safe no-op renders (only if you later define these)
   if (screenId === "screenHistory" && typeof renderHistory === "function") renderHistory();
   if (screenId === "screenCalendar" && typeof renderCalendar === "function") renderCalendar();
